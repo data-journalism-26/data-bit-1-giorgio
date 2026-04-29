@@ -1,0 +1,26 @@
+# Large regenerable artifacts
+data/era5/
+data/tiles/
+data/geodata/
+output/frames/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rcheck/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# CDS API credentials
+.cdsapirc
