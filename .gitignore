@@ -3,6 +3,7 @@ data/era5/
 data/tiles/
 data/geodata/
 output/frames/
+output/figures/
 
 # R
 .Rproj.user/

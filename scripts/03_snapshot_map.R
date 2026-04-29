@@ -62,6 +62,12 @@ ws <- sqrt(u^2 + v^2) * 3.6                 # m/s -> km/h
 ws <- terra::disagg(ws, fact = 4, method = "bilinear")
 names(ws) <- "wind"
 
+# MSLP at the same timestep, in hPa, smoothed for nicer contour curves.
+msl_at <- msl[[peak_idx]] / 100
+msl_at <- terra::disagg(msl_at, fact = 4, method = "bilinear")
+names(msl_at) <- "msl"
+msl_df <- as.data.frame(msl_at, xy = TRUE)
+
 # ---- 4. Bounding box and world layer ----
 MAP_X <- c(5, 22)
 MAP_Y <- c(29, 42)
@@ -127,7 +133,13 @@ seas <- tibble::tribble(
 )
 
 # ---- 5. Shipwrecks ----
-united <- read_csv("data/united_cyclone_harry.csv", show_col_types = FALSE)
+# Numbers / Excel may export CSV with ';' (Italian locale) or ',' — auto-detect.
+.read_smart <- function(p) {
+  l1 <- readLines(p, n = 1, warn = FALSE)
+  read_delim(p, delim = if (grepl(";", l1)) ";" else ",",
+             show_col_types = FALSE)
+}
+united <- .read_smart("data/united_cyclone_harry.csv")
 united_at <- united |> filter(incident_date_clean <= as.Date(peak_time))
 cat(sprintf("UNITED records up to that time: %d (deaths %d)\n",
             nrow(united_at), sum(united_at$n_deaths, na.rm = TRUE)))
@@ -218,6 +230,14 @@ build_plot <- function(provider, maxcell = Inf) {
       name    = "Wind speed\n(km/h)") +
     geom_spatraster_rgb(data = base_tile, alpha = 1, maxcell = maxcell) +
     geom_sf(data = coast, colour = "grey20", linewidth = 0.18) +
+    geom_contour(data = msl_df,
+                 aes(x = x, y = y, z = msl, colour = after_stat(level)),
+                 linewidth = 0.5, alpha = 0.9,
+                 breaks = seq(980, 1024, by = 4)) +
+    scale_colour_distiller(palette = "Blues", direction = -1,
+                           name = "Pressure\n(hPa)",
+                           limits = c(984, 1024),
+                           breaks = c(984, 1004, 1024)) +
     geom_text(data = seas, aes(x = lon, y = lat, label = name),
               size = 4.2, fontface = "italic", colour = "grey25", alpha = 0.85) +
     geom_point(data = cities, aes(x = lon, y = lat),
@@ -258,6 +278,12 @@ build_plot <- function(provider, maxcell = Inf) {
         barwidth = unit(5, "cm"),
         barheight = unit(0.35, "cm"),
         order = 1),
+      colour = guide_colourbar(
+        title.position = "top",
+        barwidth = unit(3.5, "cm"),
+        barheight = unit(0.35, "cm"),
+        reverse = TRUE,
+        order = 2),
       size = guide_legend(
         direction = "horizontal",
         title.position = "top",
@@ -265,7 +291,7 @@ build_plot <- function(provider, maxcell = Inf) {
         nrow = 1,
         override.aes = list(fill = "#D32F2F", colour = "#7A1B1B",
                             stroke = 0.5, alpha = 0.65),
-        order = 2)) +
+        order = 3)) +
     coord_sf(xlim = MAP_X, ylim = MAP_Y, expand = FALSE) +
     labs(title    = "Cyclone Harry over the Central Mediterranean migration route",
          subtitle = "More than 1,000 people are presumed to have died crossing the route at the end of January, during the storm.",
@@ -303,6 +329,6 @@ cat(sprintf("Rendering: %s | %gx%g in @ %d dpi\n",
 
 stamp    <- format(peak_time, "%Y-%m-%d_%H%MZ")
 p        <- build_plot(PROVIDER, maxcell = Inf)
-out_file <- file.path(OUT, paste0("snapshot_", stamp, ".png"))
+out_file <- file.path(OUT, paste0("snapshot_", stamp, "_mslp.png"))
 ggsave(out_file, p, width = RENDER_W, height = RENDER_H, dpi = RENDER_DPI)
 cat("Saved:", out_file, "\n")

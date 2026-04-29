@@ -35,6 +35,8 @@ u10 <- c(rast(file.path(ERA5, "jan_atm_instant.nc"), subds = "u10"),
          rast(file.path(ERA5, "feb_atm_instant.nc"), subds = "u10"))
 v10 <- c(rast(file.path(ERA5, "jan_atm_instant.nc"), subds = "v10"),
          rast(file.path(ERA5, "feb_atm_instant.nc"), subds = "v10"))
+msl <- c(rast(file.path(ERA5, "jan_atm_instant.nc"), subds = "msl"),
+         rast(file.path(ERA5, "feb_atm_instant.nc"), subds = "msl"))
 times <- c(read_times(file.path(ERA5, "jan_atm_instant.nc")),
            read_times(file.path(ERA5, "feb_atm_instant.nc")))
 stopifnot(nlyr(u10) == length(times))
@@ -82,7 +84,12 @@ seas <- tibble::tribble(
 )
 
 # ---- 3. Shipwrecks ----
-united <- read_csv("data/united_cyclone_harry.csv", show_col_types = FALSE)
+.read_smart <- function(p) {
+  l1 <- readLines(p, n = 1, warn = FALSE)
+  read_delim(p, delim = if (grepl(";", l1)) ";" else ",",
+             show_col_types = FALSE)
+}
+united <- .read_smart("data/united_cyclone_harry.csv")
 
 # ---- 4. Globals (cached) ----
 globals <- readRDS(file.path(ERA5, "_globals.rds"))
@@ -139,6 +146,11 @@ build_frame <- function(idx, frame_no) {
   names(ws) <- "wind"
   ws_df <- as.data.frame(ws, xy = TRUE)
 
+  msl_at <- msl[[idx]] / 100
+  msl_at <- terra::disagg(msl_at, fact = 4, method = "bilinear")
+  names(msl_at) <- "msl"
+  msl_df <- as.data.frame(msl_at, xy = TRUE)
+
   t         <- times[idx]
   united_at <- dplyr::filter(united, incident_date_clean <= as.Date(t))
   n_wrecks  <- nrow(united_at)
@@ -157,6 +169,14 @@ build_frame <- function(idx, frame_no) {
       name    = "Wind speed\n(km/h)") +
     geom_spatraster_rgb(data = base_tile, alpha = 1, maxcell = 5e5) +
     geom_sf(data = coast, colour = "grey20", linewidth = 0.18) +
+    geom_contour(data = msl_df,
+                 aes(x = x, y = y, z = msl, colour = after_stat(level)),
+                 linewidth = 0.5, alpha = 0.9,
+                 breaks = seq(980, 1024, by = 4)) +
+    scale_colour_distiller(palette = "Blues", direction = -1,
+                           name = "Pressure\n(hPa)",
+                           limits = c(984, 1024),
+                           breaks = c(984, 1004, 1024)) +
     geom_text(data = seas, aes(x = lon, y = lat, label = name),
               size = 4.2, fontface = "italic", colour = "grey25", alpha = 0.85) +
     geom_point(data = cities, aes(x = lon, y = lat),
@@ -196,6 +216,12 @@ build_frame <- function(idx, frame_no) {
         barwidth = unit(5, "cm"),
         barheight = unit(0.35, "cm"),
         order = 1),
+      colour = guide_colourbar(
+        title.position = "top",
+        barwidth = unit(3.5, "cm"),
+        barheight = unit(0.35, "cm"),
+        reverse = TRUE,
+        order = 2),
       size = guide_legend(
         direction = "horizontal",
         title.position = "top",
@@ -203,34 +229,18 @@ build_frame <- function(idx, frame_no) {
         nrow = 1,
         override.aes = list(fill = "#D32F2F", colour = "#7A1B1B",
                             stroke = 0.5, alpha = 0.65),
-        order = 2)) +
+        order = 3)) +
     coord_sf(xlim = MAP_X, ylim = MAP_Y, expand = FALSE) +
     labs(title    = "Cyclone Harry over the Central Mediterranean migration route",
          subtitle = "More than 1,000 people are presumed to have died crossing the route at the end of January, during the storm.",
-         caption  = paste0(
-           "**Data sources:** ",
-           "Wind: hourly ERA5 reanalysis (ECMWF / Copernicus Climate Data Store). ",
-           "Shipwrecks: UNITED for Intercultural Action, List of Refugee Deaths. ",
-           "Basemap: CartoDB · OpenStreetMap contributors (ODbL).<br>",
-           "**Notes:** ",
-           "Each red circle marks a reported sinking or body recovery; circle size scales with the ",
-           "number of dead or missing. Many bodies were never recovered."
-         ),
          x = NULL, y = NULL) +
     base_theme +
     theme(plot.title    = element_text(size = 16, face = "bold", colour = "grey5"),
           plot.subtitle = element_text(size = 11.5, colour = "grey25", lineheight = 1.15,
-                                       margin = margin(t = 2, b = 6)),
-          plot.caption  = ggtext::element_textbox_simple(
-            size = 8, colour = "grey25", hjust = 0,
-            lineheight = 1.35,
-            padding = margin(8, 10, 8, 10),
-            margin  = margin(t = 10),
-            fill = "grey97", box.color = "grey55", linewidth = 0.4,
-            r = unit(2, "pt")))
+                                       margin = margin(t = 2, b = 6)))
 
   out <- file.path(FRAMES, sprintf("frame_%04d.png", frame_no))
-  ggsave(out, p, width = 9, height = 10.5, dpi = 150)
+  ggsave(out, p, width = 9, height = 9, dpi = 150)
   invisible(out)
 }
 
