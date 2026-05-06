@@ -2,11 +2,9 @@
 
 **Author:** Giorgio Coppola · **Date:** May 2026 · GRAD-E1493 Data Journalism, Hertie School
 
-A short interactive piece on the **IOM Missing Migrants Project** record (2014–2026), restricted to the five sea corridors to Europe — Central, Western and Eastern Mediterranean, the Atlantic route to the Canary Islands, and the English Channel. Death points are coloured by sea corridor and overlaid on the broader African and Eurasian migration-route network. The map has a month-level period slider (with month/year dropdowns) and four filters: sea corridor, region of origin, cause of death, and incident size.
+Counting deaths and disappearances at sea is inherently difficult and often depends on the testimonies of survivors from shipwrecks, or, when there are no survivors, on recovered bodies and thorough cross-referencing of all accessible information about the missing person. These numbers are rarely precise and should be interpreted cautiously; they almost certainly represent a lower bound of the actual total.
 
-Current dataset: **3,394 events · 40,665 dead or missing**, January 2014 through early May 2026.
-
-## View
+## 📄 View
 
 **[Open on raw.githack.com](https://raw.githack.com/data-journalism-26/data-bit-1-giorgio/main/article.html)** · or run a local server:
 
@@ -61,7 +59,7 @@ The R scripts use `dplyr`, `readr`, `sf`, `lubridate`, `stringr`, `rnaturalearth
 - **Basemap** — CartoDB Positron, © OpenStreetMap contributors, ODbL.
 - **Migration-route overlay** — hand-digitized 62 corridor polylines + 12 main migration hubs + 4 sea-route arrival points (Lampedusa, Lesbos, Canary Islands, Almería), traced from IOM's [Global Overview of Migration Routes](https://dtm.iom.int/global-overview-of-migration-routes-portal) portal. Geometry is approximate; corridor countries were sanity-checked against IOM DTM displacement data.
 
-## Methodology (brief)
+## Methodology
 
 - **Sea-routes scope.** The GeoJSON is restricted to the five sea corridors connecting to Europe. Land routes (Sahara desert, Türkiye–Europe land, Western Balkans, Belarus–EU, Italy–France, Ukraine → Europe) and post-arrival deaths inside Europe are filtered out at build time.
 - **English Channel filter.** Because IOM's *Mainland Europe to the UK* bucket mixes Channel-crossing drownings with inland truck and motorway deaths, that route alone is restricted spatially: incidents must fall in the Channel itself or within 5 km of the French or British coast.
