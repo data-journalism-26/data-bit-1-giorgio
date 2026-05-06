@@ -18,7 +18,7 @@
 //
 // Sections, in order:
 //   1.  Time helpers
-//   2.  Map setup (Leaflet, fullscreen control, basemap)
+//   2.  Map setup (Leaflet, basemap)
 //   3.  Size encoding (radius + bucket)
 //   4.  Tooltip + layer builder
 //   5.  State + DOM refs
@@ -59,66 +59,13 @@ window.addEventListener('load', function () {
     zoom: 4,
     zoomSnap: 0.5,
     scrollWheelZoom: false,   // avoid hijacking page scroll
-    zoomControl: false        // we add this manually below so the
-                              // fullscreen button can sit on top of it
+    zoomControl: false        // we add this manually below so it lands
+                              // at topleft instead of Leaflet's default
   });
 
-  // Fullscreen control + zoom (topleft, fullscreen on top). Leaflet stacks
-  // same-corner controls in insertion order, so we add the fullscreen
-  // button first, then the zoom control below it. Uses the browser's
-  // native Fullscreen API on the .leaflet-figure element so the title,
-  // map and selectors all stay visible in the fullscreen layout (styled
-  // by the :fullscreen rules in style.css).
-  var fig = document.querySelector('.leaflet-figure');
-
-  var fullscreenControl = L.control({ position: 'topleft' });
-  fullscreenControl.onAdd = function () {
-    var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-    var btn = L.DomUtil.create('a', 'leaflet-control-fullscreen-btn', container);
-    btn.href = '#';
-    btn.title = 'View map in fullscreen';
-    btn.setAttribute('role', 'button');
-    btn.setAttribute('aria-label', 'Toggle fullscreen view');
-    btn.innerHTML =
-      '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
-      '<path fill="currentColor" d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5z' +
-      'M5 19h5v2H3v-7h2v5zm14 0v-5h2v7h-7v-2h5z"/></svg>';
-    L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.on(btn, 'click', function (e) {
-      L.DomEvent.preventDefault(e);
-      L.DomEvent.stopPropagation(e);
-      var elem = fig || map.getContainer();
-      var doc = document;
-      var fsEl = doc.fullscreenElement || doc.webkitFullscreenElement ||
-                 doc.mozFullScreenElement || doc.msFullscreenElement;
-      if (!fsEl) {
-        var req = elem.requestFullscreen      || elem.webkitRequestFullscreen ||
-                  elem.mozRequestFullScreen   || elem.msRequestFullscreen;
-        if (req) req.call(elem);
-      } else {
-        var exit = doc.exitFullscreen         || doc.webkitExitFullscreen ||
-                   doc.mozCancelFullScreen    || doc.msExitFullscreen;
-        if (exit) exit.call(doc);
-      }
-    });
-    return container;
-  };
-  fullscreenControl.addTo(map);
+  // Zoom control only — the fullscreen toggle was removed; readers who
+  // want a bigger map can use the browser's own zoom (Cmd/Ctrl + +).
   L.control.zoom({ position: 'topleft' }).addTo(map);
-
-  // After entering/exiting fullscreen the map element changes size; tell
-  // Leaflet to recompute its viewport and redraw the histogram so the
-  // slider bars align with the new rail. Catches ESC, F11 and programmatic
-  // exits as well as the button click.
-  ['fullscreenchange', 'webkitfullscreenchange',
-   'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
-    document.addEventListener(ev, function () {
-      setTimeout(function () {
-        map.invalidateSize();
-        if (typeof drawHistogram === 'function') drawHistogram();
-      }, 100);
-    });
-  });
 
   // CartoDB Positron — light grey basemap with country, sea/ocean and
   // major-city labels.

@@ -15,8 +15,7 @@
      8. Filter bar + Choices.js overrides
      9. noUiSlider (year-range brush) overrides
     10. Map annotations (cities / seas / SAR — kept for future use)
-    11. Fullscreen control + figure fullscreen state
-    12. Footer / mobile breakpoints
+    11. Footer / mobile breakpoints
    ============================================================ */
 
 :root {
@@ -248,8 +247,7 @@ figure.hero-image img {
 /* Breakout: the figure renders wider than the 1040px prose column for
    visual impact (typical long-form journalism layout). Caps at 1320px
    and shrinks to fit narrower viewports so it never causes horizontal
-   scroll. The negative side margins pull it outside the article column;
-   the :fullscreen rule below uses !important to override on fullscreen. */
+   scroll. The negative side margins pull it outside the article column. */
 .leaflet-figure {
   --fig-w: min(1320px, calc(100vw - 32px));
   width: var(--fig-w);
@@ -868,57 +866,11 @@ figure.hero-image img {
     0 0 4px #fafafa, 0 0 4px #fafafa, 0 0 4px #fafafa;
 }
 
-/* ── 11. Fullscreen control + figure fullscreen state ─────
-   Custom button matches Leaflet's .leaflet-bar styling so it lines
-   up with the zoom +/-. The figure is the fullscreen target so the
-   title, source caption, period slider and filter dropdowns all stay
-   visible alongside the map. The padding gives the title and selectors
-   breathing room and keeps them from hugging the screen edge. */
-.leaflet-control-fullscreen-btn {
-  display: block;
-  width: 26px;
-  height: 26px;
-  line-height: 26px;
-  text-align: center;
-  background: #fff;
-  color: #333;
-  text-decoration: none;
-  border: none;
-}
-.leaflet-control-fullscreen-btn svg { vertical-align: middle; }
-.leaflet-control-fullscreen-btn:hover  { background: #f4f4f4; color: #000; }
-.leaflet-control-fullscreen-btn:focus  { outline: none; }
+/* (Section 11 — figure fullscreen — removed; the toggle was deleted
+   from article.js. Browser zoom (Cmd/Ctrl + +) is the fallback for
+   readers who want a bigger map.) */
 
-.leaflet-figure:fullscreen,
-.leaflet-figure:-webkit-full-screen,
-.leaflet-figure:-moz-full-screen {
-  max-width: 100% !important;
-  margin: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  padding: 28px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  background: var(--bg-figure) !important;
-  box-sizing: border-box !important;
-}
-/* Map fills the space between the header rows (title + source caption)
-   and the docked footer rows (counts, period slider, filter dropdowns). */
-.leaflet-figure:fullscreen #incident-map,
-.leaflet-figure:-webkit-full-screen #incident-map,
-.leaflet-figure:-moz-full-screen #incident-map {
-  flex: 1 1 auto !important;
-  height: auto !important;
-  min-height: 0 !important;
-}
-.leaflet-figure:fullscreen > *,
-.leaflet-figure:-webkit-full-screen > *,
-.leaflet-figure:-moz-full-screen > * { flex: 0 0 auto; }
-.leaflet-figure:fullscreen figcaption,
-.leaflet-figure:-webkit-full-screen figcaption,
-.leaflet-figure:-moz-full-screen figcaption { display: none; }
-
-/* ── 12. Footer + mobile ─────────────────────────────────── */
+/* ── 11. Footer + mobile ─────────────────────────────────── */
 hr.rule {
   border: 0;
   border-top: 1px solid var(--line);
