@@ -69,45 +69,36 @@ window.addEventListener('load', function () {
   // native Fullscreen API on the .leaflet-figure element so the title,
   // map and selectors all stay visible in the fullscreen layout (styled
   // by the :fullscreen rules in style.css).
-  var ICON_EXPAND =
-    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
-    '<path fill="currentColor" d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5z' +
-    'M5 19h5v2H3v-7h2v5zm14 0v-5h2v7h-7v-2h5z"/></svg>';
-  var ICON_SHRINK =
-    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
-    '<path fill="currentColor" d="M5 10h5V3H8v5H5v2zm9-7v7h7V8h-5V3h-2z' +
-    'M5 14v2h3v5h2v-7H5zm9 7h2v-5h5v-2h-7v7z"/></svg>';
   var fig = document.querySelector('.leaflet-figure');
-  var fullscreenBtn;
-
-  function fullscreenElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement ||
-           document.mozFullScreenElement || document.msFullscreenElement;
-  }
 
   var fullscreenControl = L.control({ position: 'topleft' });
   fullscreenControl.onAdd = function () {
     var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-    fullscreenBtn = L.DomUtil.create('a', 'leaflet-control-fullscreen-btn', container);
-    fullscreenBtn.href = '#';
-    fullscreenBtn.title = 'View map in fullscreen';
-    fullscreenBtn.setAttribute('role', 'button');
-    fullscreenBtn.setAttribute('aria-label', 'Toggle fullscreen view');
-    fullscreenBtn.setAttribute('aria-pressed', 'false');
-    fullscreenBtn.innerHTML = ICON_EXPAND;
+    var btn = L.DomUtil.create('a', 'leaflet-control-fullscreen-btn', container);
+    btn.href = '#';
+    btn.title = 'View map in fullscreen';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('aria-label', 'Toggle fullscreen view');
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">' +
+      '<path fill="currentColor" d="M5 5h5V3H3v7h2V5zm14 0v5h2V3h-7v2h5z' +
+      'M5 19h5v2H3v-7h2v5zm14 0v-5h2v7h-7v-2h5z"/></svg>';
     L.DomEvent.disableClickPropagation(container);
-    L.DomEvent.on(fullscreenBtn, 'click', function (e) {
+    L.DomEvent.on(btn, 'click', function (e) {
       L.DomEvent.preventDefault(e);
       L.DomEvent.stopPropagation(e);
       var elem = fig || map.getContainer();
-      if (!fullscreenElement()) {
+      var doc = document;
+      var fsEl = doc.fullscreenElement || doc.webkitFullscreenElement ||
+                 doc.mozFullScreenElement || doc.msFullscreenElement;
+      if (!fsEl) {
         var req = elem.requestFullscreen      || elem.webkitRequestFullscreen ||
                   elem.mozRequestFullScreen   || elem.msRequestFullscreen;
         if (req) req.call(elem);
       } else {
-        var exit = document.exitFullscreen        || document.webkitExitFullscreen ||
-                   document.mozCancelFullScreen   || document.msExitFullscreen;
-        if (exit) exit.call(document);
+        var exit = doc.exitFullscreen         || doc.webkitExitFullscreen ||
+                   doc.mozCancelFullScreen    || doc.msExitFullscreen;
+        if (exit) exit.call(doc);
       }
     });
     return container;
@@ -116,18 +107,12 @@ window.addEventListener('load', function () {
   L.control.zoom({ position: 'topleft' }).addTo(map);
 
   // After entering/exiting fullscreen the map element changes size; tell
-  // Leaflet to recompute its viewport, redraw the histogram (so the slider
-  // bars align with the new rail), and swap the icon + tooltip. Catches
-  // ESC, F11 and programmatic exits as well as the button click.
+  // Leaflet to recompute its viewport and redraw the histogram so the
+  // slider bars align with the new rail. Catches ESC, F11 and programmatic
+  // exits as well as the button click.
   ['fullscreenchange', 'webkitfullscreenchange',
    'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
     document.addEventListener(ev, function () {
-      var on = !!fullscreenElement();
-      if (fullscreenBtn) {
-        fullscreenBtn.innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
-        fullscreenBtn.title = on ? 'Exit fullscreen' : 'View map in fullscreen';
-        fullscreenBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      }
       setTimeout(function () {
         map.invalidateSize();
         if (typeof drawHistogram === 'function') drawHistogram();

@@ -1,4 +1,4 @@
-# More than 40,000 dead or missing at sea reaching Europe since 2014. The real number is higher.
+# Where do migrants die or go missing at sea — and how are they counted?
 
 **Author:** Giorgio Coppola · **Date:** May 2026 · GRAD-E1493 Data Journalism, Hertie School
 
