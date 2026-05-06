@@ -1,4 +1,4 @@
-# Data Bit 1 — How are dead and missing migrants at sea counted?
+# Data Bit 1 — More than 40,000 dead or missing at sea reaching Europe since 2014. The real number is higher.
 
 **Author:** Giorgio Coppola · **Date:** May 2026 · GRAD-E1493 Data Journalism, Hertie School
 

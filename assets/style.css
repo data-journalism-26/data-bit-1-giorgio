@@ -37,6 +37,11 @@ body {
   font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
   font-size: 18px;
   line-height: 1.65;
+  /* Render the whole page at 90% — equivalent to the reader pressing
+     Ctrl/Cmd+− once. Scales text, map, controls, hero image and
+     methodology dropdown together. Supported in all major browsers
+     (Chrome, Safari, Firefox 126+). */
+  zoom: 0.9;
 }
 
 article {
