@@ -16,6 +16,7 @@
      9. noUiSlider (year-range brush) overrides
     10. Map annotations (cities / seas / SAR — kept for future use)
     11. Footer / mobile breakpoints
+    12. Methodology section
    ============================================================ */
 
 :root {
@@ -886,7 +887,7 @@ hr.rule {
 .sources strong { color: var(--text); }
 .sources a { color: var(--muted); border-bottom-color: #cfcfcf; }
 
-/* ── 13. Methodology section ──────────────────────────────
+/* ── 12. Methodology section ──────────────────────────────
    Rendered as a collapsible <details> dropdown wrapped in a soft box,
    so the methodology is reachable but doesn't dominate the article
    visually. Sans-serif and slightly smaller than the body so the
