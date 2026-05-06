@@ -86,6 +86,59 @@ in_channel_sea_or_near_coast <- function(lat, lon, channel_sea) {
 COUNTRY_POLYS <- ne_countries(scale = "medium", returnclass = "sf") |>
   dplyr::select(name = name_long)
 
+# IOM uses several country labels that don't match rnaturalearth's
+# `name_long` field, so the polygon lookup silently fails (returning NA
+# distance) and the row is never flagged. Aliases below map IOM's labels
+# to the values found in `name_long`.
+IOM_COUNTRY_ALIASES <- c(
+  "Türkiye"                                              = "Turkey",
+  "Iran (Islamic Republic of)"                           = "Iran",
+  "Syrian Arab Republic"                                 = "Syria",
+  "United Kingdom of Great Britain and Northern Ireland" = "United Kingdom",
+  "Republic of Moldova"                                  = "Moldova",
+  "Cabo Verde"                                           = "Republic of Cabo Verde"
+)
+# Normalize free-text country labels so the polygon lookup can find them:
+# strip "Libya - presumed departure on ..." style suffixes, parenthetical
+# clarifications like "Morocco (en route to Ceuta)", and apply the alias map.
+normalize_iom_country <- function(x) {
+  x <- as.character(x)
+  x <- sub(" *-+ .*$", "", x)
+  x <- sub(" *\\(.*\\)$", "", x)
+  ifelse(!is.na(x) & x %in% names(IOM_COUNTRY_ALIASES),
+         IOM_COUNTRY_ALIASES[x], x)
+}
+
+# Per-route lon/lat bounding boxes (rough sea polygons). Used in addition
+# to the country-distance check to catch rows whose `Route` label
+# disagrees with the coordinate — IOM has a handful of Eastern-Med rows
+# with coordinates that plot in central-Med Italian waters; the country
+# label ("Greece"/"Türkiye") is close enough to those coordinates to pass
+# the 500 km tolerance, so without this check they leak through.
+# Routes without a bbox entry (land routes) silently pass.
+ROUTE_BBOX <- list(
+  `Eastern Mediterranean`                                  = list(lon = c(19,  36), lat = c(31, 42)),
+  `Central Mediterranean`                                  = list(lon = c( 4,  22), lat = c(30, 42)),
+  `Western Mediterranean`                                  = list(lon = c(-7,  4),  lat = c(34, 44)),
+  `Western Africa / Atlantic route to the Canary Islands`  = list(lon = c(-26, -3), lat = c(10, 35)),
+  `Mainland Europe to the UK`                              = list(lon = c(-3,  4),  lat = c(48, 52))
+)
+
+# Vector predicate: TRUE for each (lat, lon, route) where either the route
+# has no bbox (silent pass) or the coordinate sits inside it.
+in_route_bbox <- function(lat, lon, route) {
+  out <- rep(TRUE, length(lat))
+  for (rname in names(ROUTE_BBOX)) {
+    bb <- ROUTE_BBOX[[rname]]
+    on_route <- !is.na(route) & route == rname
+    if (!any(on_route)) next
+    out[on_route] <- !is.na(lat[on_route]) & !is.na(lon[on_route]) &
+                     lat[on_route] >= bb$lat[1] & lat[on_route] <= bb$lat[2] &
+                     lon[on_route] >= bb$lon[1] & lon[on_route] <= bb$lon[2]
+  }
+  out
+}
+
 # Distance (km) from each (lat, lon) to its named country polygon.
 # 0 = inside the polygon; otherwise km outside.
 dist_to_country_km <- function(lat, lon, country_name) {
@@ -106,10 +159,11 @@ dist_to_country_km <- function(lat, lon, country_name) {
   out
 }
 
-# Validate IOM coords against `Country of Incident`. Returns corrected
-# lat/lon (NA on rows that should be dropped) plus a bookkeeping column
-# saying which fix was applied.
-validate_iom_coords <- function(lat, lon, country) {
+# Validate IOM coords against `Country of Incident` and `Route`. Returns
+# corrected lat/lon (NA on rows that should be dropped) plus a bookkeeping
+# column saying which fix was applied. `country` should already be the
+# rnaturalearth-aligned name (call normalize_iom_country() on it first).
+validate_iom_coords <- function(lat, lon, country, route) {
   n   <- length(lat)
   fix <- rep("none", n)
   out_lat <- lat; out_lon <- lon
@@ -124,14 +178,17 @@ validate_iom_coords <- function(lat, lon, country) {
   is_eq <- !is_ph & abs(lat - lon) < 0.001
   fix[is_eq] <- "drop-lateqlon"
 
-  # Country-distance check + auto-fix on the surviving rows.
-  # 500 km tolerance is loose: legitimate sea deaths recorded 20-80
-  # nautical miles offshore can land 300-450 km from a coastal country.
-  # The 200 km accept threshold for the transforms is a tighter
-  # "did this clearly fix it?" check.
-  to_check <- which(fix == "none")
-  d0       <- dist_to_country_km(lat[to_check], lon[to_check], country[to_check])
-  bad      <- to_check[!is.na(d0) & d0 > 500]
+  # Country-distance check + route-bbox check on the surviving rows.
+  # 500 km tolerance for country distance is loose: legitimate sea deaths
+  # recorded 20-80 nautical miles offshore can land 300-450 km from a
+  # coastal country. The 200 km accept threshold for transforms is a
+  # tighter "did this clearly fix it?" check, and a fixed coord must also
+  # land inside its route's bbox to be accepted.
+  to_check    <- which(fix == "none")
+  d0          <- dist_to_country_km(lat[to_check], lon[to_check], country[to_check])
+  in_bbox0    <- in_route_bbox(lat[to_check], lon[to_check], route[to_check])
+  far_country <- !is.na(d0) & d0 > 500
+  bad         <- to_check[far_country | !in_bbox0]
   if (length(bad) > 0) {
     variants <- list(
       `lon-flip`     = list(lat = lat[bad],  lon = -lon[bad]),
@@ -141,14 +198,24 @@ validate_iom_coords <- function(lat, lon, country) {
     dists <- vapply(variants, function(v) {
       dist_to_country_km(v$lat, v$lon, country[bad])
     }, numeric(length(bad)))
-    if (length(bad) == 1) dists <- matrix(dists, nrow = 1)
+    bboxes <- vapply(variants, function(v) {
+      in_route_bbox(v$lat, v$lon, route[bad])
+    }, logical(length(bad)))
+    if (length(bad) == 1) {
+      dists  <- matrix(dists,  nrow = 1)
+      bboxes <- matrix(bboxes, nrow = 1)
+    }
 
     for (i in seq_along(bad)) {
       j <- bad[i]
       v_dists <- dists[i, ]
       v_dists[is.na(v_dists)] <- Inf
-      best <- which.min(v_dists)
-      if (v_dists[best] < 200) {
+      v_bbox  <- bboxes[i, ]
+      candidate <- v_dists < 200 & v_bbox
+      if (any(candidate)) {
+        masked <- v_dists
+        masked[!candidate] <- Inf
+        best <- which.min(masked)
         out_lat[j] <- variants[[best]]$lat[i]
         out_lon[j] <- variants[[best]]$lon[i]
         fix[j]     <- names(variants)[best]
@@ -285,8 +352,11 @@ iom <- read_smart("data/raw/iom_europe.csv") |>
   filter(!is.na(lat), !is.na(lon), !is.na(date))
 
 # Coord validation: fix sign-flips / swaps where possible, drop irrecoverable.
+# Country names are normalized to rnaturalearth's `name_long` only for the
+# distance lookup; the original label is preserved in the output GeoJSON.
 cat("\n--- IOM coord validation ---\n")
-.fix          <- validate_iom_coords(iom$lat, iom$lon, iom$country)
+.country_norm <- normalize_iom_country(iom$country)
+.fix          <- validate_iom_coords(iom$lat, iom$lon, .country_norm, iom$route)
 iom$orig_lat  <- iom$lat   # bookkeeping for the diagnostic below
 iom$orig_lon  <- iom$lon
 iom$lat       <- .fix$lat
@@ -303,10 +373,70 @@ iom |>
   as.data.frame() |>
   print()
 
+# Audit log: every row whose coordinates were touched — rescued, flagged,
+# or excluded — is written to a side-by-side CSV so readers can audit
+# which IOM rows we transformed, flagged on the map, or removed from it.
+# `map_lat`/`map_lon` is the position the row gets on the rendered map
+# (NA for excluded rows); `coord_status` is the user-facing label that
+# matches the on-map dot's tooltip.
+iom_audit <- iom |>
+  filter(fix != "none") |>
+  transmute(
+    main_id        = `Main ID`,
+    year           = year,
+    date           = as.character(date),
+    country        = country,
+    route          = route,
+    location       = location,
+    orig_lat       = orig_lat,
+    orig_lon       = orig_lon,
+    map_lat        = ifelse(fix %in% c("drop-placeholder", "drop-lateqlon"),
+                            NA_real_, lat),
+    map_lon        = ifelse(fix %in% c("drop-placeholder", "drop-lateqlon"),
+                            NA_real_, lon),
+    n_dead_missing = n,
+    fix_type       = fix,
+    coord_status   = dplyr::case_when(
+      fix == "drop-placeholder"                            ~ "excluded (placeholder coordinates)",
+      fix == "drop-lateqlon"                               ~ "excluded (lat == lon, garbage)",
+      fix == "drop-noFix"                                  ~ "flagged (shown at IOM's coordinates)",
+      fix %in% c("lon-flip", "lat-lon-swap", "swap+flip") ~ "corrected (sign-flip or lat/lon swap)",
+      TRUE                                                  ~ "ok"
+    )
+  ) |>
+  arrange(fix_type, year, main_id)
+write_csv(iom_audit, "data/built/coord_audit.csv")
+cat("\nWrote data/built/coord_audit.csv (",
+    nrow(iom_audit), "rows; ",
+    sum(iom_audit$fix_type %in% c("drop-placeholder", "drop-lateqlon")), "excluded, ",
+    sum(iom_audit$fix_type == "drop-noFix"), "flagged, ",
+    sum(!grepl("^drop-", iom_audit$fix_type)), "corrected)\n")
+
+# Translate the row-level fix code to a coord_status the front-end can use:
+#   ok        — coordinates passed both checks unchanged
+#   corrected — coordinates rescued by a sign-flip / lat-lon swap; the
+#               row is shown at the corrected position, the original
+#               (orig_lat, orig_lon) is kept in the tooltip for transparency
+#   flagged   — country / route disagree with the coordinates and no
+#               transform reconciles them; the row is shown at IOM's
+#               original coordinates with a visible warning (rather than
+#               silently dropped — readers see all the data, plus our note
+#               that IOM's coords for this row don't match the location text)
+# drop-placeholder (33.0148, 12.549 reused as "unknown") and drop-lateqlon
+# (lat == lon, clearly garbage) are still excluded — those aren't real
+# coordinates that can be honestly displayed anywhere.
 iom <- iom |>
-  filter(!grepl("^drop-", fix)) |>
-  select(-fix, -orig_lat, -orig_lon) |>
-  filter(route %in% SEA_ROUTES)
+  mutate(
+    coord_status = dplyr::case_when(
+      fix == "none"                                       ~ "ok",
+      fix %in% c("lon-flip", "lat-lon-swap", "swap+flip") ~ "corrected",
+      fix == "drop-noFix"                                 ~ "flagged",
+      TRUE                                                 ~ "drop"
+    )
+  ) |>
+  filter(coord_status != "drop") |>
+  filter(route %in% SEA_ROUTES) |>
+  select(-fix)
 
 # Channel-specific spatial filter: drop "Mainland Europe to the UK" rows
 # whose coordinates fall deep inland (truck/motorway/asphyxiation deaths
@@ -324,7 +454,9 @@ if (length(ec_idx) > 0) {
   iom <- iom[-drop_idx, ]
 }
 
-# Aggregate rows that share (lat, lon, date) into one feature.
+# Aggregate rows that share (lat, lon, date) into one feature. coord_status
+# escalates to the worst level present in the group (flagged > corrected >
+# ok); orig_lat/orig_lon are passed through for the front-end tooltip.
 iom_collapsed <- iom |>
   group_by(lon, lat, date) |>
   summarise(
@@ -339,9 +471,20 @@ iom_collapsed <- iom |>
     cause_macro    = first_non_na(cause_macro),
     origin_macro   = first_non_na(origin_macro),
     date_precision = first_non_na(date_precision),
+    coord_status   = if (any(coord_status == "flagged"))      "flagged"
+                     else if (any(coord_status == "corrected")) "corrected"
+                     else                                       "ok",
+    orig_lat       = first(orig_lat),
+    orig_lon       = first(orig_lon),
     .groups        = "drop"
   ) |>
-  mutate(date = as.character(date))
+  mutate(
+    date     = as.character(date),
+    # Only carry orig coords when they actually differ — keeps the GeoJSON
+    # smaller and the front-end logic simple (NA = nothing extra to show).
+    orig_lat = ifelse(coord_status == "ok", NA_real_, orig_lat),
+    orig_lon = ifelse(coord_status == "ok", NA_real_, orig_lon)
+  )
 
 iom_sf <- st_as_sf(iom_collapsed, coords = c("lon", "lat"), crs = 4326)
 

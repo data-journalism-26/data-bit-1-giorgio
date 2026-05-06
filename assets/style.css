@@ -342,6 +342,25 @@ figure.hero-image img {
   font-size: 11px;
   letter-spacing: 0.02em;
 }
+/* Coord-status banners on the incident tooltip — flagged is amber/red so
+   it reads as a warning, corrected is a quieter grey-blue note. */
+.leaflet-tooltip.incident-tip .coord-flag {
+  margin-top: 6px;
+  padding: 5px 7px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.leaflet-tooltip.incident-tip .coord-flag.flagged {
+  background: #fbecea;
+  color: #802417;
+  border-left: 3px solid #b32b1f;
+}
+.leaflet-tooltip.incident-tip .coord-flag.corrected {
+  background: #eef2f7;
+  color: #2a3a52;
+  border-left: 3px solid #4a6fa5;
+}
 
 /* ── 5b. On-map legend ─────────────────────────────────────── */
 .leaflet-control.map-legend,
@@ -429,6 +448,14 @@ figure.hero-image img {
   background: transparent;
   border: 1.5px solid #cfcfcf;
 }
+/* Flagged swatch: pale fill with a dashed red outline — mirrors the
+   on-map style applied to circleMarkers whose IOM coords disagree with
+   the location text. */
+.map-legend .swatch.swatch-flagged {
+  background: #fbecea;
+  border: 1px dashed #b32b1f;
+  box-shadow: none;
+}
 .map-legend .legend-note {
   color: #6c6c6c;
   font-size: 10.5px;
@@ -436,6 +463,45 @@ figure.hero-image img {
   margin: 2px 0 0 18px;
   line-height: 1.3;
 }
+
+/* Click-toggle header that collapses the legend body — gives mobile
+   users a way to get the legend out of the way of the map. */
+.map-legend .legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: -8px -10px 6px;          /* cancel the .map-legend padding so
+                                       the header reaches the rounded corners */
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #ececec;
+  border-radius: 4px 4px 0 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+.map-legend .legend-toggle:hover { background: #f7f7f7; color: var(--text); }
+.map-legend .legend-toggle:focus { outline: none; }
+.map-legend .legend-toggle-chevron {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text);
+  transition: transform 180ms ease;
+}
+.map-legend.is-collapsed .legend-toggle {
+  margin-bottom: -9px;             /* hug the bottom edge when no body */
+  border-bottom: 0;
+}
+.map-legend.is-collapsed .legend-toggle-chevron { transform: rotate(180deg); }
+.map-legend.is-collapsed .legend-body { display: none; }
 
 /* ── 5c. Hub label (transparent map overlay) ─────────────── */
 .leaflet-tooltip.hub-label {
@@ -824,36 +890,33 @@ figure.hero-image img {
 .leaflet-control-fullscreen-btn:focus  { outline: none; }
 
 .leaflet-figure:fullscreen,
-.leaflet-figure:-webkit-full-screen {
+.leaflet-figure:-webkit-full-screen,
+.leaflet-figure:-moz-full-screen {
   max-width: 100% !important;
   margin: 0 !important;
-  width: 100vw;
-  height: 100vh;
-  padding: 28px 28px 28px !important;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-figure);
+  width: 100vw !important;
+  height: 100vh !important;
+  padding: 28px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--bg-figure) !important;
+  box-sizing: border-box !important;
 }
 /* Map fills the space between the header rows (title + source caption)
    and the docked footer rows (counts, period slider, filter dropdowns). */
 .leaflet-figure:fullscreen #incident-map,
-.leaflet-figure:-webkit-full-screen #incident-map {
-  flex: 1 1 auto;
+.leaflet-figure:-webkit-full-screen #incident-map,
+.leaflet-figure:-moz-full-screen #incident-map {
+  flex: 1 1 auto !important;
   height: auto !important;
-  min-height: 0;
+  min-height: 0 !important;
 }
-.leaflet-figure:fullscreen .map-title,
-.leaflet-figure:fullscreen .source-caption,
-.leaflet-figure:fullscreen .map-toggle,
-.leaflet-figure:fullscreen .year-bar,
-.leaflet-figure:fullscreen .filter-bar,
-.leaflet-figure:-webkit-full-screen .map-title,
-.leaflet-figure:-webkit-full-screen .source-caption,
-.leaflet-figure:-webkit-full-screen .map-toggle,
-.leaflet-figure:-webkit-full-screen .year-bar,
-.leaflet-figure:-webkit-full-screen .filter-bar { flex: 0 0 auto; }
+.leaflet-figure:fullscreen > *,
+.leaflet-figure:-webkit-full-screen > *,
+.leaflet-figure:-moz-full-screen > * { flex: 0 0 auto; }
 .leaflet-figure:fullscreen figcaption,
-.leaflet-figure:-webkit-full-screen figcaption { display: none; }
+.leaflet-figure:-webkit-full-screen figcaption,
+.leaflet-figure:-moz-full-screen figcaption { display: none; }
 
 /* ── 12. Footer + mobile ─────────────────────────────────── */
 hr.rule {

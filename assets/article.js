@@ -180,6 +180,26 @@ window.addEventListener('load', function () {
     }
     var flag = PRECISION_FLAGS[p.date_precision];
     if (flag) html += '<div class="precision-flag">' + escapeHtml(flag) + '</div>';
+    // Coord-status banner — flagged rows have IOM-side coords that
+    // disagree with the location text or route; corrected rows had a
+    // sign-flip / lat-lon swap reconciled. Both cases get a visible note
+    // so readers see exactly which dots we touched and why.
+    if (p.coord_status === 'flagged') {
+      html += '<div class="coord-flag flagged">'
+           +   '<strong>⚠ Flagged location.</strong> IOM placed this incident at '
+           +   (p.orig_lat != null ? p.orig_lat.toFixed(4) : '?') + ', '
+           +   (p.orig_lon != null ? p.orig_lon.toFixed(4) : '?')
+           +   ', but those coordinates don’t match the location described or the route. '
+           +   'Shown here at IOM’s coordinates — treat the dot’s position as suspect.'
+           + '</div>';
+    } else if (p.coord_status === 'corrected') {
+      html += '<div class="coord-flag corrected">'
+           +   '<strong>Corrected location.</strong> IOM’s recorded coordinates ('
+           +   (p.orig_lat != null ? p.orig_lat.toFixed(4) : '?') + ', '
+           +   (p.orig_lon != null ? p.orig_lon.toFixed(4) : '?')
+           +   ') appeared to have a sign or lat/lon swap; we’ve plotted the reconciled position.'
+           + '</div>';
+    }
     return html;
   }
 
@@ -202,16 +222,21 @@ window.addEventListener('load', function () {
     });
     return L.geoJSON({ type: 'FeatureCollection', features: sorted }, {
       pointToLayer: function (feat, latlng) {
-        var sel = isRouteSelected(feat.properties);
-        var col = sel ? (ROUTE_COLORS[feat.properties.route] || '#8A8784')
-                      : '#bcbcbc';
+        var p   = feat.properties;
+        var sel = isRouteSelected(p);
+        var col = sel ? (ROUTE_COLORS[p.route] || '#8A8784') : '#bcbcbc';
+        // Flagged rows draw with a dashed stroke and a slightly heavier
+        // outline so readers can see at a glance which dots are at IOM-
+        // recorded coordinates that disagree with the location text.
+        var flagged = p.coord_status === 'flagged';
         return L.circleMarker(latlng, {
-          radius:      radiusFor(feat.properties.n_dead),
+          radius:      radiusFor(p.n_dead),
           fillColor:   col,
-          color:       col,
-          weight:      1,
-          fillOpacity: sel ? 0.55 : 0.10,
-          opacity:     sel ? 0.85 : 0.20
+          color:       flagged ? '#b32b1f' : col,
+          weight:      flagged ? 1 : 1,
+          dashArray:   flagged ? '2,2' : null,
+          fillOpacity: sel ? (flagged ? 0.30 : 0.55) : 0.10,
+          opacity:     sel ? 0.90 : 0.25
         });
       },
       onEachFeature: function (feat, layer) {
@@ -636,7 +661,10 @@ window.addEventListener('load', function () {
     });
 
     // 12c. Mount the on-map legend. Built here (not earlier) so it can
-    //      read the freshly hydrated palette + labels.
+    //      read the freshly hydrated palette + labels. The legend is a
+    //      click-toggleable dropdown — useful on mobile where the panel
+    //      otherwise covers a chunk of the map. Defaults to collapsed
+    //      below 700 px viewport width.
     var legend = L.control({ position: 'topright' });
     legend.onAdd = function () {
       var div = L.DomUtil.create('div', 'map-legend');
@@ -658,7 +686,19 @@ window.addEventListener('load', function () {
         'Eastern Mediterranean': true,
         'Mainland Europe to the UK': true
       };
-      var html = '<div class="legend-title">Migration corridor</div>';
+
+      var startCollapsed = window.matchMedia &&
+        window.matchMedia('(max-width: 700px)').matches;
+      if (startCollapsed) div.classList.add('is-collapsed');
+
+      var html = '';
+      html += '<button class="legend-toggle" type="button"'
+        + ' aria-expanded="' + (startCollapsed ? 'false' : 'true') + '">'
+        + '<span class="legend-toggle-label">Legend</span>'
+        + '<span class="legend-toggle-chevron" aria-hidden="true">▾</span>'
+        + '</button>';
+      html += '<div class="legend-body">';
+      html += '<div class="legend-title">Migration corridor</div>';
       routeOrder.forEach(function (r) {
         var c = ROUTE_COLORS[r];
         var dot = hasDots[r]
@@ -669,7 +709,9 @@ window.addEventListener('load', function () {
           + '<span class="swatch-line" style="background:' + c + '"></span>'
           + '<span>' + ROUTE_SHORT_LABELS[r] + '</span></div>';
       });
-      html += '<div class="legend-note">Dots show recorded sea-route deaths only.</div>'
+      html += '<div class="legend-row">'
+        +   '<span class="swatch swatch-flagged"></span>'
+        +   '<span>Flagged location</span></div>'
         + '<div class="legend-divider"></div>'
         + '<div class="legend-row">'
         +   '<span class="swatch-line" style="background:#666;"></span>'
@@ -692,7 +734,16 @@ window.addEventListener('load', function () {
         +   '<span style="margin-left:4px;">1 &middot; 50 &middot; 300+</span>'
         + '</div>'
         + '</div>';
+      html += '</div>';  // .legend-body
       div.innerHTML = html;
+
+      var toggleBtn = div.querySelector('.legend-toggle');
+      L.DomEvent.on(toggleBtn, 'click', function (e) {
+        L.DomEvent.preventDefault(e);
+        L.DomEvent.stopPropagation(e);
+        var nowCollapsed = div.classList.toggle('is-collapsed');
+        toggleBtn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+      });
       return div;
     };
     legend.addTo(map);
